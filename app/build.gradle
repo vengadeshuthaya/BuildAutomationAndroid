@@ -1,4 +1,13 @@
+import java.text.SimpleDateFormat
+
 apply plugin: 'com.android.application'
+
+def projectName = "BuildAutomation"
+def verCode = 1
+def verName = "1.0"
+// The destinaation path where you want to generate apk and Build note
+def outputPath = "F:\\Dev\\Android\\Builds\\" + projectName + "\\"
+def outputName = ""
 
 android {
     compileSdkVersion 27
@@ -6,19 +15,93 @@ android {
         applicationId "com.neelesh.buildautomationapp"
         minSdkVersion 19
         targetSdkVersion 27
-        versionCode 1
-        versionName "1.1"
+        versionCode verCode
+        versionName verName
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def file = output.outputFile
+            if (file != null && file.name.endsWith('.apk')) {
+                outputName = file.name
+                outputName = outputName.replace(".apk", "_v_" + verName + ".apk")
+                output.outputFile = new File(outputPath, outputName)
+            }
+            variant.assemble.doLast {
+                new File(outputPath + "\\BuildNote.txt").text = """
+                        Version : $versionName
+                        Version-Code : $verCode
+                        Build-Time : ${
+                    new SimpleDateFormat("dd-MM-yyyy HH:mm:ss").format(new Date())
+                }
+                        Application-Name : BuildAutomation
+                        Pointing-To : ${variant.productFlavors[0].getName().toUpperCase()}-Server
+                        Build-Branch : ${getCurrentBranchName()}
+                        Build-Scope : """
+            }
+        }
+    }
+
     buildTypes {
         release {
-            minifyEnabled false
+            debuggable false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            debuggable true
+//            minifyEnabled true
+//            shrinkResources true
+//            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // Specifies one flavor dimension.
+    flavorDimensions "version"
+    productFlavors {
+        Development {
+            // Assigns this product flavor to the "version" flavor dimension.
+            // This property is optional if you are using only one dimension.
+            dimension "version"
+            applicationIdSuffix ".dev"
+            resValue "string", "flavored_app_name", "DEV-BuildAutomation"
+        }
+
+        Production {
+            dimension "version"
+            applicationIdSuffix ".prod"
+            resValue "string", "flavored_app_name", "PROD-BuildAutomation"
+        }
+
+        UAT {
+            dimension "version"
+            applicationIdSuffix ".uat"
+            resValue "string", "flavored_app_name", "UAT-BuildAutomation"
         }
     }
 }
+// get current branch name
+ext.getCurrentBranchName = {
+    new ByteArrayOutputStream().withStream { os ->
+        exec {
+            executable = "git"
+            args = ["rev-parse", "--abbrev-ref", "HEAD"]
+            standardOutput = os
+        }
+        return os.toString()
+    }
+}
+
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation 'com.android.support:appcompat-v7:27.1.1'
 }
+
+// delete destination folder
+task cleanExtra(type: Delete) {
+    delete outputPath + outputName
+}
+clean.dependsOn(cleanExtra)
